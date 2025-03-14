@@ -98,7 +98,7 @@ export class AuthService {
         email,
       },
       {
-        expiresIn: '30s',
+        expiresIn: '1hr',
         secret: this.configService.get('ACCESS_TOKEN_SECRET'),
       },
     );

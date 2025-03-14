@@ -6,6 +6,8 @@ import { join } from 'path';
 import { PrismaService } from './prisma/prisma.service';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { AccessTokenGuard } from './auth/guards/accessToken.guards';
 
 @Module({
   imports: [
@@ -20,6 +22,9 @@ import { ConfigModule } from '@nestjs/config';
     UserModule,
   ],
   controllers: [],
-  providers: [PrismaService],
+  providers: [
+    PrismaService,
+    { provide: 'APP_GUARD', useClass: AccessTokenGuard },
+  ],
 })
 export class AppModule {}
