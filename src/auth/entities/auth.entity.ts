@@ -1,14 +1,14 @@
-import { ObjectType, Field, Int } from '@nestjs/graphql';
+import { ObjectType, Field } from '@nestjs/graphql';
 
 @ObjectType()
 export class Auth {
   @Field()
-  id: number;
+  id: string;
 
   @Field()
   email: string;
 
-  @Field({ nullable: true})
+  @Field({ nullable: true })
   biometricKey?: string;
 
   @Field()
@@ -16,4 +16,10 @@ export class Auth {
 
   @Field()
   updatedAt: Date;
+
+  @Field()
+  accessToken: string;
+
+  @Field()
+  refreshToken: string;
 }

@@ -1,67 +1,126 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { EmailSignupInputDto } from './dto/email-signup-input';
-import {
-  hashPassword,
-  verifyHash,
-  generateToken,
-} from 'src/utils/bcrypt.helper';
-import { PrismaService } from 'prisma/prisma.service';
+import { SignUpInput } from './dto/signup-input';
+import { SignInInput } from './dto/sigin-input.';
+import { BiometricLoginInputDto } from './dto/biometric-input';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import * as argon from 'argon2';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
-  async register(
-    signUpInput: EmailSignupInputDto,
-  ): Promise<{ access_token: string }> {
-    const { email, password } = signUpInput;
-
-    //check for existing user
+  // Sign up
+  async signup(signUpInput: SignUpInput) {
+    // Check for existing user
     const existingUser = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: signUpInput.email },
     });
 
     if (existingUser) {
-      throw new ConflictException('Email already exists');
+      throw new ConflictException('Email already exists.');
     }
 
-    const hashedPassword = await hashPassword(password);
-
+    // hash password
+    const hashedPassword = await argon.hash(signUpInput.hashedPassword);
     const user = await this.prisma.user.create({
       data: {
-        email,
-        password: hashedPassword,
+        email: signUpInput.email,
+        hashedPassword: hashedPassword,
       },
     });
-    return this.generateToken(user, this.jwtService);
+
+    const { accessToken, refreshToken } = await this.createTokens(
+      user.id,
+      user.email,
+    );
+    await this.updateRefreshToken(user.id, refreshToken);
+    return { accessToken, refreshToken, user };
   }
 
-  // Login
-  async login(
-    email: string,
-    password: string,
-  ): Promise<{ accessToken: string }> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
-
-    // check if email exists
+  // // Login
+  async signin(signInInput: SignInInput) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: signInInput.email },
+    });
     if (!user) {
-      throw new UnauthorizedException(`This email is not registered`);
+      throw new UnauthorizedException('Incorrect Email');
     }
 
-    // check if password is correct
-    const isPasswordValid = await verifyHash(password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Incorrect password');
-    }
+    const verifyPassword = await argon.verify(
+      user.hashedPassword,
+      signInInput.password,
+    );
 
-    return this.generateToken(user);
+    if (!verifyPassword) {
+      throw new UnauthorizedException('Incorrect Password');
+    }
+    const { accessToken, refreshToken } = await this.createTokens(
+      user.id,
+      user.email,
+    );
+
+    await this.updateRefreshToken(user.id, refreshToken);
+
+    return { accessToken, refreshToken, user };
+  }
+
+
+  // // Biometric Login
+  // async biometricLogin(
+  //   biometricLogin: BiometricLoginInputDto,
+  // ): Promise<{ accessToken: string }> {
+  //   const user = await this.prisma.user.findUnique({
+  //     where: { biometricKey: biometricLogin.biometricKey },
+  //   });
+
+  //   if (!user) {
+  //     throw new UnauthorizedException('Invalid biometric key');
+  //   }
+
+  //   return this.generateToken(user.id.toString());
+  // }
+
+  async createTokens(userId: number, email: string) {
+    const accessToken = this.jwtService.sign(
+      {
+        userId,
+        email,
+      },
+      {
+        expiresIn: '30s',
+        secret: this.configService.get('ACCESS_TOKEN_SECRET'),
+      },
+    );
+    const refreshToken = this.jwtService.sign(
+      {
+        userId,
+        email,
+        accessToken,
+      },
+      {
+        expiresIn: '7d',
+        secret: this.configService.get('REFRESH_TOKEN_SECRET'),
+      },
+    );
+    return { accessToken, refreshToken };
+  }
+
+  async updateRefreshToken(userId: number, refreshToken: string) {
+    const hashedRefreshToken = await argon.hash(refreshToken);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { hashedRefreshToken },
+    });
   }
 }
