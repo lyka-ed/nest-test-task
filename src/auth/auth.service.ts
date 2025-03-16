@@ -76,20 +76,20 @@ export class AuthService {
   }
 
 
-  // // Biometric Login
-  // async biometricLogin(
-  //   biometricLogin: BiometricLoginInputDto,
-  // ): Promise<{ accessToken: string }> {
-  //   const user = await this.prisma.user.findUnique({
-  //     where: { biometricKey: biometricLogin.biometricKey },
-  //   });
+  // Biometric Login
+  async biometricLogin(
+    biometricLogin: BiometricLoginInputDto,
+  ): Promise<{ accessToken: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { biometricKey: biometricLogin.biometricKey },
+    });
 
-  //   if (!user) {
-  //     throw new UnauthorizedException('Invalid biometric key');
-  //   }
+    if (!user) {
+      throw new UnauthorizedException('Invalid biometric key');
+    }
 
-  //   return this.generateToken(user.id.toString());
-  // }
+    return this.generateToken(user.id.toString());
+  }
 
   async createTokens(userId: number, email: string) {
     const accessToken = this.jwtService.sign(
